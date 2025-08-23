@@ -1,6 +1,35 @@
 #!/bin/bash
 
+
 set -e
+
+# Parse arguments
+OUTPUT_DIR="."
+
+show_help() {
+  echo "Usage: $0 [-o output_dir] [-h]"
+  echo "  -o output_dir   Specify output directory (default: .)"
+  echo "  -h              Show this help message"
+}
+
+while getopts "o:h" opt; do
+  case $opt in
+    o)
+      OUTPUT_DIR="$OPTARG"
+      ;;
+    h)
+      show_help
+      exit 0
+      ;;
+    *)
+      show_help >&2
+      exit 1
+      ;;
+  esac
+done
+
+# Ensure output directory exists
+mkdir -p "$OUTPUT_DIR"
 
 # Check for required tools
 echo "Checking for required tools..."
@@ -18,8 +47,7 @@ CERT_DAYS=${CERT_DAYS:-365}
 echo "Certificate validity period: $CERT_DAYS days"
 echo
 
-# Create a config file for the CA certificate
-cat > ca.cnf <<EOF
+cat > "$OUTPUT_DIR/ca.cnf" <<EOF
 [req]
 distinguished_name = req_distinguished_name
 x509_extensions = v3_ca
@@ -35,15 +63,12 @@ basicConstraints = critical,CA:true
 keyUsage = critical,digitalSignature,cRLSign,keyCertSign
 EOF
 
-# CA
-openssl ecparam -name prime256v1 -genkey -noout -out ca.key
-openssl req -x509 -new -nodes -key ca.key -out ca.crt -days "$CERT_DAYS" -extensions v3_ca -config ca.cnf
+openssl ecparam -name prime256v1 -genkey -noout -out "$OUTPUT_DIR/ca.key"
+openssl req -x509 -new -nodes -key "$OUTPUT_DIR/ca.key" -out "$OUTPUT_DIR/ca.crt" -days "$CERT_DAYS" -extensions v3_ca -config "$OUTPUT_DIR/ca.cnf"
 
-# Server
-openssl ecparam -name prime256v1 -genkey -noout -out server.key
+openssl ecparam -name prime256v1 -genkey -noout -out "$OUTPUT_DIR/server.key"
 
-# Create a config file for the server certificate
-cat > server.cnf <<EOF
+cat > "$OUTPUT_DIR/server.cnf" <<EOF
 [req]
 distinguished_name = req_distinguished_name
 req_extensions = v3_req
@@ -62,9 +87,9 @@ DNS.3 = *.nip.io
 DNS.4 = *.xip.io
 EOF
 
-openssl req -new -key server.key -out server.csr -config server.cnf
+openssl req -new -key "$OUTPUT_DIR/server.key" -out "$OUTPUT_DIR/server.csr" -config "$OUTPUT_DIR/server.cnf"
 
-echo 1000 > ca.srl
-openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAserial ca.srl -out server.crt -days "$CERT_DAYS" -sha256 -extensions v3_req -extfile server.cnf
+echo 1000 > "$OUTPUT_DIR/ca.srl"
+openssl x509 -req -in "$OUTPUT_DIR/server.csr" -CA "$OUTPUT_DIR/ca.crt" -CAkey "$OUTPUT_DIR/ca.key" -CAserial "$OUTPUT_DIR/ca.srl" -out "$OUTPUT_DIR/server.crt" -days "$CERT_DAYS" -sha256 -extensions v3_req -extfile "$OUTPUT_DIR/server.cnf"
 
-rm ca.cnf server.cnf ca.srl
+rm "$OUTPUT_DIR/ca.cnf" "$OUTPUT_DIR/server.cnf" "$OUTPUT_DIR/ca.srl"
