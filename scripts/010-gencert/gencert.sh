@@ -13,6 +13,11 @@ done
 echo "All required tools are available."
 echo
 
+# Configure certificate validity period (default: 365 days)
+CERT_DAYS=${CERT_DAYS:-365}
+echo "Certificate validity period: $CERT_DAYS days"
+echo
+
 # Create a config file for the CA certificate
 cat > ca.cnf <<EOF
 [req]
@@ -32,7 +37,7 @@ EOF
 
 # CA
 openssl ecparam -name prime256v1 -genkey -noout -out ca.key
-openssl req -x509 -new -nodes -key ca.key -out ca.crt -days 365 -extensions v3_ca -config ca.cnf
+openssl req -x509 -new -nodes -key ca.key -out ca.crt -days "$CERT_DAYS" -extensions v3_ca -config ca.cnf
 
 # Server
 openssl ecparam -name prime256v1 -genkey -noout -out server.key
@@ -60,6 +65,6 @@ EOF
 openssl req -new -key server.key -out server.csr -config server.cnf
 
 echo 1000 > ca.srl
-openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAserial ca.srl -out server.crt -days 365 -sha256 -extensions v3_req -extfile server.cnf
+openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAserial ca.srl -out server.crt -days "$CERT_DAYS" -sha256 -extensions v3_req -extfile server.cnf
 
 rm ca.cnf server.cnf ca.srl
