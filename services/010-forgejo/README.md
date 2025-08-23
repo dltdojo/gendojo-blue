@@ -25,7 +25,7 @@ Quick usage
    ./forgejo.sh
 
 Access the web UI
-- After the service is started, open your browser at: http://localhost:3000/
+- After the service is started, open your browser at: https://forgejo.localtest.me
 - On first run you will be prompted by Forgejo to create the initial admin account and configure the instance.
 
 Useful commands

@@ -3,12 +3,29 @@ networks:
     external: false
 
 services:
-  server:
+  forgejo101:
     image: codeberg.org/forgejo/forgejo:12
+    deploy: # Add deploy configuration for resource limits
+      resources:
+        limits:
+          memory: 2G # Limit memory to 2GB
+          cpus: '1.0' # Limit CPU to 1 core
     container_name: forgejo
     environment:
       - USER_UID=1000
       - USER_GID=1000
+      - FORGEJO__server__DISABLE_SSH=true
+      - FORGEJO__server__PROTOCOL=https
+      - FORGEJO__server__ROOT_URL=https://forgejo.localtest.me
+      - FORGEJO__server__HTTP_PORT=443
+      - FORGEJO__server__CERT_FILE=/pki/server.crt
+      - FORGEJO__server__KEY_FILE=/pki/server.key
+      - FORGEJO__security__PASSWORD_HASH_ALGO=argon2
+      - FORGEJO__oauth2_JWT__SIGNING_ALGORITHM=ES256
+      - FORGEJO__metrics__ENABLED=true
+      - FORGEJO__i18n__LANGS=en-US,zh-TW
+      - FORGEJO__i18n__NAMES=English,繁體中文（台灣）
+      - FORGEJO__time__DEFAULT_UI_LOCATION=Asia/Taipei
     restart: always
     networks:
       - forgejo
@@ -16,8 +33,9 @@ services:
       - forgejo-data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
+      - ./pki:/pki:ro
     ports:
-      - '3000:3000'
+      - '443:443'
 
 volumes:
   forgejo-data:

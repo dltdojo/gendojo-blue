@@ -13,6 +13,13 @@ init_pki() {
   fi
 }
 
+backup_forgejo() {
+  docker compose exec -u git -w /data/git forgejo101 forgejo dump --file=forgejo-dump.zip
+  docker compose cp forgejo101:/data/git/forgejo-dump.zip .
+  # docker compose exec -u git -w /data/git forgejo101 ls -alth
+  echo "Backup functionality is not implemented yet."
+}
+
 check_commands_exist() {
   # Ensure each provided command is available in PATH
   for cmd in "$@"; do
@@ -34,7 +41,7 @@ start_forgejo_docker() {
   # Change to the service directory (where docker compose file lives) and start containers
   if (cd "$SCRIPT_DIR" && docker compose up -d); then
     echo "Forgejo services started."
-    echo "Open your browser at: http://localhost:3000/"
+    echo "Open your browser at: https://forgejo.localtest.me"
   else
     echo "Failed to start Forgejo services. Check Docker output with: (cd \"$SCRIPT_DIR\" && docker compose logs -f)" >&2
     return 1
