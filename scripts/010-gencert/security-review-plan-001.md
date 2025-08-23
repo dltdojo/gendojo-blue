@@ -222,7 +222,7 @@ The `gencert.sh` script demonstrates good cryptographic practices but requires s
 
 - [x] Private key file permissions set to 600
 - [ ] Temporary files created in secure locations
-- [ ] Certificate validity periods configurable
+- [x] Certificate validity periods configurable
 - [ ] Input validation implemented
 - [ ] Error handling enhanced
 - [ ] Serial number randomization implemented
