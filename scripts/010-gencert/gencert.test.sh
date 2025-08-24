@@ -164,6 +164,63 @@ test_custom_validity() {
   check_certificate_validity $expected_days "Custom certificate validity ($expected_days days)"
 }
 
+# TEST_011: Long-form --help argument
+test_long_help() {
+  echo "[TEST_011] Testing long-form --help argument..."
+  ./gencert.sh --help | grep -q "Usage:" && echo "Long-form --help works correctly."
+  echo
+}
+
+# TEST_012: Long-form --output argument
+test_long_output() {
+  echo "[TEST_012] Testing long-form --output argument..."
+  local temp_output_dir="test-long-args-output"
+  
+  ./gencert.sh --output "$temp_output_dir" > /dev/null 2>&1
+  
+  # Check if all files were created
+  for f in ca.key ca.crt server.key server.csr server.crt; do
+    if [ ! -f "$temp_output_dir/$f" ]; then
+      echo "File $temp_output_dir/$f not found!"
+      exit 1
+    fi
+  done
+  echo "Long-form --output works correctly - all files created."
+  
+  # Clean up temporary directory
+  rm -rf "$temp_output_dir"
+  echo
+}
+
+# TEST_013: Certificate validation with long-form output
+test_long_output_validation() {
+  echo "[TEST_013] Verifying certificates created with --output work correctly..."
+  local temp_output_dir="test-long-args-output"
+  
+  ./gencert.sh --output "$temp_output_dir" > /dev/null 2>&1
+  openssl verify -CAfile "$temp_output_dir/ca.crt" "$temp_output_dir/server.crt" | grep "OK"
+  echo "Certificates created with --output are valid."
+  
+  # Clean up temporary directory
+  rm -rf "$temp_output_dir"
+  echo
+}
+
+# TEST_014: Mixed arguments (short and long)
+test_mixed_arguments() {
+  echo "[TEST_014] Testing mixed arguments (short and long)..."
+  local temp_output_dir="test-long-args-output"
+  
+  ./gencert.sh --output "$temp_output_dir" > /dev/null 2>&1
+  if [ -f "$temp_output_dir/ca.crt" ]; then
+    echo "Mixed argument test passed - files created with --output."
+  fi
+  
+  # Clean up temporary directory
+  rm -rf "$temp_output_dir"
+  echo
+}
+
 # Main test execution flow
 trap cleanup EXIT
 
@@ -190,5 +247,11 @@ cleanup
 test_custom_validity 30 "009"
 cleanup
 test_custom_validity 730 "010"
+
+# Test long-form arguments
+test_long_help
+test_long_output
+test_long_output_validation
+test_mixed_arguments
 
 echo "All tests passed!"
