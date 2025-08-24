@@ -14,10 +14,30 @@ init_pki() {
 }
 
 backup_forgejo() {
-  docker compose exec -u git -w /data/git forgejo101 forgejo dump --file=forgejo-dump.zip
-  docker compose cp forgejo101:/data/git/forgejo-dump.zip .
-  # docker compose exec -u git -w /data/git forgejo101 ls -alth
-  echo "Backup functionality is not implemented yet."
+  echo "Creating Forgejo backup..."
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if ! check_commands_exist docker; then
+    return 1
+  fi
+
+  # Generate timestamp in format YYYYMMDD-HHMMSS
+  TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+  BACKUP_FILENAME="forgejo-backup-${TIMESTAMP}.zip"
+  
+  # Change to the service directory and create backup
+  if (cd "$SCRIPT_DIR" && docker compose exec -u git -w /data/git forgejo101 forgejo dump --file="$BACKUP_FILENAME"); then
+    # Copy backup file from container to host
+    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "."); then
+      echo "Backup created successfully: $BACKUP_FILENAME"
+      return 0
+    else
+      echo "Failed to copy backup file from container." >&2
+      return 1
+    fi
+  else
+    echo "Failed to create Forgejo backup. Make sure Forgejo is running." >&2
+    return 1
+  fi
 }
 
 check_commands_exist() {
@@ -72,12 +92,14 @@ Options:
   -i    Initialize PKI (create pki directory and CA certificate)
   -s    Start Forgejo with Docker Compose (docker compose up -d)
   -x    Stop Forgejo and remove containers + volumes (docker compose down -v)
+  -b    Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
   -h    Show this help message
 
 Examples:
   $(basename "$0") -i    # initialize PKI
   $(basename "$0") -s    # start Forgejo with docker compose
   $(basename "$0") -x    # stop Forgejo and remove volumes
+  $(basename "$0") -b    # create backup with timestamp
   $(basename "$0") -h    # show this help
 EOF
 }
@@ -88,11 +110,12 @@ if [ "$#" -eq 0 ]; then
   exit 0
 fi
 
-while getopts "ihsx" opt; do
+while getopts "ihsxb" opt; do
   case "$opt" in
     i) init_pki ;; 
     s) start_forgejo_docker ;;
     x) stop_forgejo_docker ;;
+    b) backup_forgejo ;;
     h) show_help; exit 0 ;;
     *) show_help; exit 1 ;;
   esac
