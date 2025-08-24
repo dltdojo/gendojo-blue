@@ -26,6 +26,7 @@ backup_forgejo() {
   # Generate timestamp in format YYYYMMDD-HHMMSS
   TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
   BACKUP_FILENAME="forgejo-backup-${TIMESTAMP}.zip"
+  LOG_FILENAME="forgejo-backup-${TIMESTAMP}.log"
   
   # Determine backup destination directory
   if [ -n "$BACKUP_DIR" ]; then
@@ -41,17 +42,83 @@ backup_forgejo() {
     BACKUP_DEST="."
   fi
   
-  # Change to the service directory and create backup
-  if (cd "$SCRIPT_DIR" && docker compose exec -u git -w /data/git forgejo101 forgejo dump --file="$BACKUP_FILENAME"); then
+  # Create log file path
+  LOG_FILE="$BACKUP_DEST/$LOG_FILENAME"
+  
+  # Initialize log file
+  {
+    echo "=== Forgejo Backup Log ==="
+    echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "Backup filename: $BACKUP_FILENAME"
+    echo "Backup destination: $BACKUP_DEST"
+    echo "Log filename: $LOG_FILENAME"
+    echo ""
+    echo "=== Backup Process ==="
+  } > "$LOG_FILE"
+  
+  # Log step 1: Starting backup process
+  echo "Step 1: Starting Forgejo dump process..." | tee -a "$LOG_FILE"
+  
+  # Change to the service directory and create backup, capturing output
+  echo "Step 2: Executing 'docker compose exec -u git -w /data/git forgejo101 forgejo dump --file=$BACKUP_FILENAME'" >> "$LOG_FILE"
+  echo "" >> "$LOG_FILE"
+  echo "=== Forgejo Dump Command Output ===" >> "$LOG_FILE"
+  
+  # Create temporary file to capture command output and status
+  TEMP_OUTPUT=$(mktemp)
+  DUMP_SUCCESS=0
+  
+  if (cd "$SCRIPT_DIR" && docker compose exec -u git -w /data/git forgejo101 forgejo dump --file="$BACKUP_FILENAME") > "$TEMP_OUTPUT" 2>&1; then
+    DUMP_SUCCESS=1
+  fi
+  
+  # Append command output to log file
+  cat "$TEMP_OUTPUT" >> "$LOG_FILE"
+  # Also display output to user
+  cat "$TEMP_OUTPUT"
+  rm -f "$TEMP_OUTPUT"
+  
+  if [ $DUMP_SUCCESS -eq 1 ]; then
+    echo "" >> "$LOG_FILE"
+    echo "Step 3: Forgejo dump completed successfully" | tee -a "$LOG_FILE"
+    
     # Copy backup file from container to host
-    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "$BACKUP_DEST"); then
+    echo "Step 4: Copying backup file from container to host..." | tee -a "$LOG_FILE"
+    
+    # Create temporary file to capture copy command output and status
+    TEMP_COPY_OUTPUT=$(mktemp)
+    COPY_SUCCESS=0
+    
+    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "$BACKUP_DEST") > "$TEMP_COPY_OUTPUT" 2>&1; then
+      COPY_SUCCESS=1
+    fi
+    
+    # Append copy command output to log file
+    cat "$TEMP_COPY_OUTPUT" >> "$LOG_FILE"
+    # Also display output to user
+    cat "$TEMP_COPY_OUTPUT"
+    rm -f "$TEMP_COPY_OUTPUT"
+    
+    if [ $COPY_SUCCESS -eq 1 ]; then
+      echo "Step 5: Backup process completed successfully" | tee -a "$LOG_FILE"
+      echo "" >> "$LOG_FILE"
+      echo "=== Backup Summary ===" >> "$LOG_FILE"
+      echo "Backup file: $BACKUP_DEST/$BACKUP_FILENAME" >> "$LOG_FILE"
+      echo "Log file: $LOG_FILE" >> "$LOG_FILE"
+      echo "Completed at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+      
       echo "Backup created successfully: $BACKUP_DEST/$BACKUP_FILENAME"
+      echo "Backup log created: $LOG_FILE"
       return 0
     else
+      echo "Step 4 FAILED: Failed to copy backup file from container" | tee -a "$LOG_FILE"
+      echo "Error occurred at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
       echo "Failed to copy backup file from container." >&2
       return 1
     fi
   else
+    echo "Step 2 FAILED: Forgejo dump command failed" | tee -a "$LOG_FILE"
+    echo "Error occurred at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
     echo "Failed to create Forgejo backup. Make sure Forgejo is running." >&2
     return 1
   fi
@@ -138,15 +205,19 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     -i|--init)
       init_pki
+      exit $?
       ;;
     -s|--start)
       start_forgejo_docker
+      exit $?
       ;;
     -x|--stop)
       stop_forgejo_docker
+      exit $?
       ;;
     -b|--backup)
       backup_forgejo
+      exit $?
       ;;
     --backup-dir)
       if [ "$#" -lt 2 ] || [[ "$2" =~ ^-- ]]; then
