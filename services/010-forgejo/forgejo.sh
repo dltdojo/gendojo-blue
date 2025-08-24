@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Global variables
+BACKUP_DIR=""
+
 init_pki() {
   PKI_DIR="pki"
   CA_CERT="$PKI_DIR/ca.crt"
@@ -24,11 +27,25 @@ backup_forgejo() {
   TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
   BACKUP_FILENAME="forgejo-backup-${TIMESTAMP}.zip"
   
+  # Determine backup destination directory
+  if [ -n "$BACKUP_DIR" ]; then
+    # Use specified backup directory
+    BACKUP_DEST="$BACKUP_DIR"
+    # Create backup directory if it doesn't exist
+    if ! mkdir -p "$BACKUP_DEST"; then
+      echo "Failed to create backup directory: $BACKUP_DEST" >&2
+      return 1
+    fi
+  else
+    # Use current directory (default behavior)
+    BACKUP_DEST="."
+  fi
+  
   # Change to the service directory and create backup
   if (cd "$SCRIPT_DIR" && docker compose exec -u git -w /data/git forgejo101 forgejo dump --file="$BACKUP_FILENAME"); then
     # Copy backup file from container to host
-    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "."); then
-      echo "Backup created successfully: $BACKUP_FILENAME"
+    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "$BACKUP_DEST"); then
+      echo "Backup created successfully: $BACKUP_DEST/$BACKUP_FILENAME"
       return 0
     else
       echo "Failed to copy backup file from container." >&2
@@ -89,23 +106,25 @@ show_help() {
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  -i, --init        Initialize PKI (create pki directory and CA certificate)
-  -s, --start       Start Forgejo with Docker Compose (docker compose up -d)
-  -x, --stop        Stop Forgejo and remove containers + volumes (docker compose down -v)
-  -b, --backup      Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
-  -h, --help        Show this help message
+  -i, --init                    Initialize PKI (create pki directory and CA certificate)
+  -s, --start                   Start Forgejo with Docker Compose (docker compose up -d)
+  -x, --stop                    Stop Forgejo and remove containers + volumes (docker compose down -v)
+  -b, --backup                  Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
+      --backup-dir DIR          Specify directory for backup files (default: current directory)
+  -h, --help                    Show this help message
 
 Examples:
-  $(basename "$0") -i           # initialize PKI
-  $(basename "$0") --init       # initialize PKI (long form)
-  $(basename "$0") -s           # start Forgejo with docker compose
-  $(basename "$0") --start      # start Forgejo with docker compose (long form)
-  $(basename "$0") -x           # stop Forgejo and remove volumes
-  $(basename "$0") --stop       # stop Forgejo and remove volumes (long form)
-  $(basename "$0") -b           # create backup with timestamp
-  $(basename "$0") --backup     # create backup with timestamp (long form)
-  $(basename "$0") -h           # show this help
-  $(basename "$0") --help       # show this help (long form)
+  $(basename "$0") -i                           # initialize PKI
+  $(basename "$0") --init                       # initialize PKI (long form)
+  $(basename "$0") -s                           # start Forgejo with docker compose
+  $(basename "$0") --start                      # start Forgejo with docker compose (long form)
+  $(basename "$0") -x                           # stop Forgejo and remove volumes
+  $(basename "$0") --stop                       # stop Forgejo and remove volumes (long form)
+  $(basename "$0") -b                           # create backup with timestamp
+  $(basename "$0") --backup                     # create backup with timestamp (long form)
+  $(basename "$0") -b --backup-dir /tmp/backups # create backup in specified directory
+  $(basename "$0") -h                           # show this help
+  $(basename "$0") --help                       # show this help (long form)
 EOF
 }
 
@@ -128,6 +147,15 @@ while [ "$#" -gt 0 ]; do
       ;;
     -b|--backup)
       backup_forgejo
+      ;;
+    --backup-dir)
+      if [ "$#" -lt 2 ] || [[ "$2" =~ ^-- ]]; then
+        echo "Error: --backup-dir requires an argument" >&2
+        show_help >&2
+        exit 1
+      fi
+      BACKUP_DIR="$2"
+      shift
       ;;
     -h|--help)
       show_help
