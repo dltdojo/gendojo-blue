@@ -89,34 +89,55 @@ show_help() {
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  -i    Initialize PKI (create pki directory and CA certificate)
-  -s    Start Forgejo with Docker Compose (docker compose up -d)
-  -x    Stop Forgejo and remove containers + volumes (docker compose down -v)
-  -b    Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
-  -h    Show this help message
+  -i, --init        Initialize PKI (create pki directory and CA certificate)
+  -s, --start       Start Forgejo with Docker Compose (docker compose up -d)
+  -x, --stop        Stop Forgejo and remove containers + volumes (docker compose down -v)
+  -b, --backup      Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
+  -h, --help        Show this help message
 
 Examples:
-  $(basename "$0") -i    # initialize PKI
-  $(basename "$0") -s    # start Forgejo with docker compose
-  $(basename "$0") -x    # stop Forgejo and remove volumes
-  $(basename "$0") -b    # create backup with timestamp
-  $(basename "$0") -h    # show this help
+  $(basename "$0") -i           # initialize PKI
+  $(basename "$0") --init       # initialize PKI (long form)
+  $(basename "$0") -s           # start Forgejo with docker compose
+  $(basename "$0") --start      # start Forgejo with docker compose (long form)
+  $(basename "$0") -x           # stop Forgejo and remove volumes
+  $(basename "$0") --stop       # stop Forgejo and remove volumes (long form)
+  $(basename "$0") -b           # create backup with timestamp
+  $(basename "$0") --backup     # create backup with timestamp (long form)
+  $(basename "$0") -h           # show this help
+  $(basename "$0") --help       # show this help (long form)
 EOF
 }
 
-# Parse command line options: -i invokes init_pki, -s starts forgejo, -x stops forgejo, -h shows help
+# Parse command line options: supports both short and long forms
 if [ "$#" -eq 0 ]; then
   show_help
   exit 0
 fi
 
-while getopts "ihsxb" opt; do
-  case "$opt" in
-    i) init_pki ;; 
-    s) start_forgejo_docker ;;
-    x) stop_forgejo_docker ;;
-    b) backup_forgejo ;;
-    h) show_help; exit 0 ;;
-    *) show_help; exit 1 ;;
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -i|--init)
+      init_pki
+      ;;
+    -s|--start)
+      start_forgejo_docker
+      ;;
+    -x|--stop)
+      stop_forgejo_docker
+      ;;
+    -b|--backup)
+      backup_forgejo
+      ;;
+    -h|--help)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      show_help
+      exit 1
+      ;;
   esac
+  shift
 done

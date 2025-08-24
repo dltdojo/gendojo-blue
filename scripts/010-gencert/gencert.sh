@@ -7,21 +7,28 @@ set -e
 OUTPUT_DIR="."
 
 show_help() {
-  echo "Usage: $0 [-o output_dir] [-h]"
-  echo "  -o output_dir   Specify output directory (default: .)"
-  echo "  -h              Show this help message"
+  echo "Usage: $0 [-o|--output output_dir] [-h|--help]"
+  echo "  -o, --output output_dir   Specify output directory (default: .)"
+  echo "  -h, --help                Show this help message"
 }
 
-while getopts "o:h" opt; do
-  case $opt in
-    o)
-      OUTPUT_DIR="$OPTARG"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -o|--output)
+      if [ "$#" -lt 2 ]; then
+        echo "Error: --output requires an argument" >&2
+        show_help >&2
+        exit 1
+      fi
+      OUTPUT_DIR="$2"
+      shift 2
       ;;
-    h)
+    -h|--help)
       show_help
       exit 0
       ;;
     *)
+      echo "Unknown option: $1" >&2
       show_help >&2
       exit 1
       ;;
