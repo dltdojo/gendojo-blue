@@ -30,13 +30,9 @@ services:
     networks:
       - forgejo
     volumes:
-      - forgejo-data:/data
+      - ./forgejo-data:/data
       - /etc/timezone:/etc/timezone:ro
       - /etc/localtime:/etc/localtime:ro
       - ./pki:/pki:ro
     ports:
       - '443:443'
-
-volumes:
-  forgejo-data:
-    driver: local

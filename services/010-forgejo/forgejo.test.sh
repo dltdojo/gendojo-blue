@@ -4,8 +4,6 @@ set -e
 
 echo "Testing forgejo.sh comprehensive functionality..."
 
-cd /home/runner/work/gendojo-blue/gendojo-blue/services/010-forgejo
-
 # =============================================================================
 # LONG-FORM ARGUMENTS TESTS (from forgejo.test-long-args.sh)
 # =============================================================================

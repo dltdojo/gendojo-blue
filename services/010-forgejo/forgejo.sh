@@ -2,6 +2,7 @@
 
 # Global variables
 BACKUP_DIR=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 init_pki() {
   PKI_DIR="pki"
@@ -9,7 +10,7 @@ init_pki() {
   if [ ! -d "$PKI_DIR" ] || [ ! -f "$CA_CERT" ]; then
     echo "PKI directory or CA certificate not found. Initializing PKI..."
     mkdir -p "$PKI_DIR"
-    "$(dirname "$0")/../../scripts/010-gencert/gencert.sh" -o "$PKI_DIR"
+    "$SCRIPT_DIR/../../scripts/010-gencert/gencert.sh" -o "$PKI_DIR"
     echo "PKI initialized."
   else
     echo "PKI directory and CA certificate already exist."
@@ -18,14 +19,13 @@ init_pki() {
 
 backup_forgejo() {
   echo "Creating Forgejo backup..."
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
   if ! check_commands_exist docker; then
     return 1
   fi
 
   # Generate timestamp in format YYYYMMDD-HHMMSS
   TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-  BACKUP_FILENAME="forgejo-backup-${TIMESTAMP}.zip"
+  BACKUP_FILENAME="forgejo-backup-${TIMESTAMP}.tgz"
   LOG_FILENAME="forgejo-backup-${TIMESTAMP}.log"
   
   # Determine backup destination directory
@@ -57,71 +57,106 @@ backup_forgejo() {
   } > "$LOG_FILE"
   
   # Log step 1: Starting backup process
-  echo "Step 1: Starting Forgejo dump process..." | tee -a "$LOG_FILE"
+  echo "Step 1: Starting backup process..." | tee -a "$LOG_FILE"
+
+  stop_forgejo_docker
   
-  # Change to the service directory and create backup, capturing output
-  echo "Step 2: Executing 'docker compose exec -u git -w /data/git forgejo101 forgejo dump --file=$BACKUP_FILENAME'" >> "$LOG_FILE"
-  echo "" >> "$LOG_FILE"
-  echo "=== Forgejo Dump Command Output ===" >> "$LOG_FILE"
-  
-  # Create temporary file to capture command output and status
-  TEMP_OUTPUT=$(mktemp)
-  DUMP_SUCCESS=0
-  
-  if (cd "$SCRIPT_DIR" && docker compose exec -u git -w /data/git forgejo101 forgejo dump --file="$BACKUP_FILENAME") > "$TEMP_OUTPUT" 2>&1; then
-    DUMP_SUCCESS=1
-  fi
-  
-  # Append command output to log file
-  cat "$TEMP_OUTPUT" >> "$LOG_FILE"
-  # Also display output to user
-  cat "$TEMP_OUTPUT"
-  rm -f "$TEMP_OUTPUT"
-  
-  if [ $DUMP_SUCCESS -eq 1 ]; then
-    echo "" >> "$LOG_FILE"
-    echo "Step 3: Forgejo dump completed successfully" | tee -a "$LOG_FILE"
-    
-    # Copy backup file from container to host
-    echo "Step 4: Copying backup file from container to host..." | tee -a "$LOG_FILE"
-    
-    # Create temporary file to capture copy command output and status
-    TEMP_COPY_OUTPUT=$(mktemp)
-    COPY_SUCCESS=0
-    
-    if (cd "$SCRIPT_DIR" && docker compose cp "forgejo101:/data/git/$BACKUP_FILENAME" "$BACKUP_DEST") > "$TEMP_COPY_OUTPUT" 2>&1; then
-      COPY_SUCCESS=1
-    fi
-    
-    # Append copy command output to log file
-    cat "$TEMP_COPY_OUTPUT" >> "$LOG_FILE"
-    # Also display output to user
-    cat "$TEMP_COPY_OUTPUT"
-    rm -f "$TEMP_COPY_OUTPUT"
-    
-    if [ $COPY_SUCCESS -eq 1 ]; then
-      echo "Step 5: Backup process completed successfully" | tee -a "$LOG_FILE"
-      echo "" >> "$LOG_FILE"
-      echo "=== Backup Summary ===" >> "$LOG_FILE"
-      echo "Backup file: $BACKUP_DEST/$BACKUP_FILENAME" >> "$LOG_FILE"
-      echo "Log file: $LOG_FILE" >> "$LOG_FILE"
-      echo "Completed at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
-      
-      echo "Backup created successfully: $BACKUP_DEST/$BACKUP_FILENAME"
-      echo "Backup log created: $LOG_FILE"
-      return 0
-    else
-      echo "Step 4 FAILED: Failed to copy backup file from container" | tee -a "$LOG_FILE"
-      echo "Error occurred at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
-      echo "Failed to copy backup file from container." >&2
-      return 1
-    fi
+  # using docker run busybox to mounut ./forgejo-data then tar czf to host's $BACKUP_DEST
+  # change ownership of backup files to current user in docker
+  if (cd "$SCRIPT_DIR" && docker run --rm -v "$BACKUP_DEST:/backup" -v "$(pwd)/forgejo-data:/data" busybox sh -c "cd /data && tar czf /backup/$BACKUP_FILENAME . && chown 1000:1000 /backup/$BACKUP_FILENAME"); then
+    echo "Step 2: Backup created successfully" | tee -a "$LOG_FILE"
   else
-    echo "Step 2 FAILED: Forgejo dump command failed" | tee -a "$LOG_FILE"
-    echo "Error occurred at: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
-    echo "Failed to create Forgejo backup. Make sure Forgejo is running." >&2
+    echo "Step 2 FAILED: Failed to create backup" | tee -a "$LOG_FILE"
     return 1
   fi
+}
+
+restore_forgejo() {
+  # Generate timestamp in format YYYYMMDD-HHMMSS
+  TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+  RESTORE_FILENAME="forgejo-backup.tgz"
+  LOG_FILE="forgejo-restore-${TIMESTAMP}.log"
+  echo "=== Forgejo Restore Log ===" > "$LOG_FILE"
+  echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')" >> "$LOG_FILE"
+  echo "Restore filename: $RESTORE_FILENAME" >> "$LOG_FILE"
+  echo "Log filename: $LOG_FILE" >> "$LOG_FILE"
+  echo "" >> "$LOG_FILE"
+  echo "=== Restore Process ===" >> "$LOG_FILE"
+
+  echo "Step 1: Checking restore file..." | tee -a "$LOG_FILE"
+  if [ ! -f "$RESTORE_FILENAME" ]; then
+    echo "Step 1 FAILED: Restore file $RESTORE_FILENAME does not exist" | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 2: Stopping Forgejo Docker..." | tee -a "$LOG_FILE"
+  if stop_forgejo_docker; then
+    echo "Step 2: Forgejo Docker stopped." | tee -a "$LOG_FILE"
+  else
+    echo "Step 2 FAILED: Could not stop Forgejo Docker." | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 3: Checking ./forgejo-data directory..." | tee -a "$LOG_FILE"
+  if [ ! -d "./forgejo-data" ]; then
+    echo "Step 3 FAILED: ./forgejo-data directory does not exist" | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 4: Changing ownership to current user..." | tee -a "$LOG_FILE"
+  cd "$SCRIPT_DIR"
+  if docker run --rm -v "$(pwd)/forgejo-data:/data" busybox sh -c "chown -R 1000:1000 /data"; then
+    echo "Step 4: Ownership changed to current user" | tee -a "$LOG_FILE"
+  else
+    echo "Step 4 FAILED: Failed to change ownership" | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 5: Moving ./forgejo-data to ./forgejo-data-old..." | tee -a "$LOG_FILE"
+  if mv ./forgejo-data ./forgejo-data-old; then
+    echo "Step 5: forgejo-data moved to forgejo-data-old" | tee -a "$LOG_FILE"
+  else
+    echo "Step 5 FAILED: Could not move forgejo-data" | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 6: Extracting backup to ./forgejo-data..." | tee -a "$LOG_FILE"
+  mkdir -p ./forgejo-data
+  if tar xzf "$RESTORE_FILENAME" -C ./forgejo-data; then
+    echo "Step 6: Backup extracted successfully" | tee -a "$LOG_FILE"
+  else
+    echo "Step 6 FAILED: Failed to extract backup" | tee -a "$LOG_FILE"
+    echo "Restore failed." | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  echo "Step 7: Restoring ownership to current user..." | tee -a "$LOG_FILE"
+  cd "$SCRIPT_DIR"
+  if docker run --rm -v "$(pwd)/forgejo-data:/data" busybox sh -c "chown -R 1000:1000 /data"; then
+    echo "Step 7: Ownership restored to current user" | tee -a "$LOG_FILE"
+  else
+    echo "Step 7 WARNING: Failed to restore ownership after extraction" | tee -a "$LOG_FILE"
+  fi
+
+  echo "Step 8: Optional - Starting Forgejo Docker..." | tee -a "$LOG_FILE"
+  if start_forgejo_docker; then
+    echo "Step 8: Forgejo Docker started." | tee -a "$LOG_FILE"
+  else
+    echo "Step 8 WARNING: Could not start Forgejo Docker automatically. Please start manually." | tee -a "$LOG_FILE"
+  fi
+
+  echo "" | tee -a "$LOG_FILE"
+  echo "=== Restore Summary ===" | tee -a "$LOG_FILE"
+  echo "Restore completed at $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+  echo "Backup file: $RESTORE_FILENAME" | tee -a "$LOG_FILE"
+  echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
+  echo "forgejo-data restored and ready." | tee -a "$LOG_FILE"
+  return 0
 }
 
 check_commands_exist() {
@@ -147,7 +182,7 @@ start_forgejo_docker() {
     echo "Forgejo services started."
     echo "Open your browser at: https://forgejo.localtest.me"
   else
-    echo "Failed to start Forgejo services. Check Docker output with: (cd \"$SCRIPT_DIR\" && docker compose logs -f)" >&2
+    echo "Failed to start Forgejo services. Check Docker output with: \(cd '$SCRIPT_DIR' && docker compose logs -f\)" >&2
     return 1
   fi
 }
@@ -159,11 +194,11 @@ stop_forgejo_docker() {
     return 1
   fi
 
-  # Change to the service directory and stop containers, remove anonymous volumes
+  # Change to the service directory and stop containers
   if (cd "$SCRIPT_DIR" && docker compose down); then
-    echo "Forgejo services stopped and volumes removed."
+    echo "Forgejo services stopped"
   else
-    echo "Failed to stop Forgejo services. Check Docker output with: (cd \"$SCRIPT_DIR\" && docker compose logs -f)" >&2
+    echo "Failed to stop Forgejo services."
     return 1
   fi
 }
@@ -217,6 +252,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     -b|--backup)
       backup_forgejo
+      exit $?
+      ;;
+    -r|--restore)
+      restore_forgejo
       exit $?
       ;;
     --backup-dir)
