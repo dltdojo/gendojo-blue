@@ -17,6 +17,25 @@ init_pki() {
   fi
 }
 
+# Backup this whole dir into plakar backup
+backup_plakar(){
+  if ! check_commands_exist plakar; then
+    return 1
+  fi
+
+  PLAKAR_BACKUP_DIR="$HOME/test/forgejo-backup"
+  # you need to create a plakar backup directory for this project.
+  if [ ! -d "$PLAKAR_BACKUP_DIR" ]; then
+    echo "Plakar backup directory $PLAKAR_BACKUP_DIR does not exist. Please create it first." >&2
+    # plakar at $PLAKAR_BACKUP_DIR create -plaintext
+    return 1
+  fi
+  stop_forgejo_docker
+  plakar at "$PLAKAR_BACKUP_DIR" backup .
+  start_forgejo_docker
+}
+
+# Backup Forgejo data 
 backup_forgejo() {
   echo "Creating Forgejo backup..."
   if ! check_commands_exist docker; then
@@ -212,6 +231,7 @@ Options:
   -s, --start                   Start Forgejo with Docker Compose (docker compose up -d)
   -x, --stop                    Stop Forgejo and remove containers + volumes (docker compose down -v)
   -b, --backup                  Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
+      --backup-plakar           Create Plakar backup (uses plakar at configured backup location)
       --backup-dir DIR          Specify directory for backup files (default: current directory)
   -h, --help                    Show this help message
 
@@ -224,6 +244,7 @@ Examples:
   $(basename "$0") --stop                       # stop Forgejo and remove volumes (long form)
   $(basename "$0") -b                           # create backup with timestamp
   $(basename "$0") --backup                     # create backup with timestamp (long form)
+  $(basename "$0") --backup-plakar               # create a plakar-managed backup
   $(basename "$0") -b --backup-dir /tmp/backups # create backup in specified directory
   $(basename "$0") -h                           # show this help
   $(basename "$0") --help                       # show this help (long form)
@@ -252,6 +273,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     -b|--backup)
       backup_forgejo
+      exit $?
+      ;;
+    --backup-plakar)
+      backup_plakar
       exit $?
       ;;
     -r|--restore)
