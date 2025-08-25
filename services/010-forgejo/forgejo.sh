@@ -2,6 +2,7 @@
 
 # Global variables
 BACKUP_DIR=""
+PLAKAR_BACKUP_DIR="$HOME/test/forgejo-backup" # global path for plakar backups (default set here)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 init_pki() {
@@ -23,7 +24,6 @@ backup_plakar(){
     return 1
   fi
 
-  PLAKAR_BACKUP_DIR="$HOME/test/forgejo-backup"
   # you need to create a plakar backup directory for this project.
   if [ ! -d "$PLAKAR_BACKUP_DIR" ]; then
     echo "Plakar backup directory $PLAKAR_BACKUP_DIR does not exist. Please create it first." >&2
@@ -32,6 +32,22 @@ backup_plakar(){
   fi
   stop_forgejo_docker
   plakar at "$PLAKAR_BACKUP_DIR" backup .
+  start_forgejo_docker
+}
+
+restore_plakar(){
+  if ! check_commands_exist plakar; then
+    return 1
+  fi
+
+  # you need to create a plakar backup directory for this project.
+  if [ ! -d "$PLAKAR_BACKUP_DIR" ]; then
+    echo "Plakar backup directory $PLAKAR_BACKUP_DIR does not exist. Please create it first." >&2
+    # plakar at $PLAKAR_BACKUP_DIR create -plaintext
+    return 1
+  fi
+  stop_forgejo_docker
+  plakar at "$PLAKAR_BACKUP_DIR" restore -to .
   start_forgejo_docker
 }
 
@@ -126,7 +142,7 @@ restore_forgejo() {
   fi
 
   echo "Step 4: Changing ownership to current user..." | tee -a "$LOG_FILE"
-  cd "$SCRIPT_DIR"
+  cd "$SCRIPT_DIR" || return 1
   if docker run --rm -v "$(pwd)/forgejo-data:/data" busybox sh -c "chown -R 1000:1000 /data"; then
     echo "Step 4: Ownership changed to current user" | tee -a "$LOG_FILE"
   else
@@ -155,7 +171,7 @@ restore_forgejo() {
   fi
 
   echo "Step 7: Restoring ownership to current user..." | tee -a "$LOG_FILE"
-  cd "$SCRIPT_DIR"
+  cd "$SCRIPT_DIR" || return 1
   if docker run --rm -v "$(pwd)/forgejo-data:/data" busybox sh -c "chown -R 1000:1000 /data"; then
     echo "Step 7: Ownership restored to current user" | tee -a "$LOG_FILE"
   else
@@ -232,7 +248,8 @@ Options:
   -x, --stop                    Stop Forgejo and remove containers + volumes (docker compose down -v)
   -b, --backup                  Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
       --backup-plakar           Create Plakar backup (uses plakar at configured backup location)
-      --backup-dir DIR          Specify directory for backup files (default: current directory)
+    --backup-dir DIR          Specify directory for backup files (default: current directory)
+  -P, --plakar-backup-dir DIR   Specify Plakar backup directory (overrides default PLAKAR_BACKUP_DIR)
   -h, --help                    Show this help message
 
 Examples:
@@ -245,6 +262,7 @@ Examples:
   $(basename "$0") -b                           # create backup with timestamp
   $(basename "$0") --backup                     # create backup with timestamp (long form)
   $(basename "$0") --backup-plakar               # create a plakar-managed backup
+  $(basename "$0") --plakar-backup-dir /tmp/plakar --backup-plakar  # use custom plakar backup dir for this run
   $(basename "$0") -b --backup-dir /tmp/backups # create backup in specified directory
   $(basename "$0") -h                           # show this help
   $(basename "$0") --help                       # show this help (long form)
@@ -290,6 +308,15 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       BACKUP_DIR="$2"
+      shift
+      ;;
+    -P|--plakar-backup-dir)
+      if [ "$#" -lt 2 ] || [[ "$2" =~ ^-- ]]; then
+        echo "Error: --plakar-backup-dir requires an argument" >&2
+        show_help >&2
+        exit 1
+      fi
+      PLAKAR_BACKUP_DIR="$2"
       shift
       ;;
     -h|--help)
