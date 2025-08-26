@@ -1,3 +1,4 @@
+name: fj101
 networks:
   forgejo:
     external: false
@@ -28,7 +29,9 @@ services:
       - FORGEJO__time__DEFAULT_UI_LOCATION=Asia/Taipei
     restart: always
     networks:
-      - forgejo
+      forgejo:
+        aliases:
+          - forgejo.localtest.me
     volumes:
       - ./forgejo-data:/data
       - /etc/timezone:/etc/timezone:ro
@@ -36,3 +39,5 @@ services:
       - ./pki:/pki:ro
     ports:
       - '443:443'
+      #- '8300:3000'
+      #- '8022:22'

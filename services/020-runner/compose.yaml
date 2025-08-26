@@ -1,0 +1,14 @@
+name: fj101-runner
+networks:
+  forgejo:
+    name: fj101_forgejo
+    external: true
+services:
+  runner:
+    image: my-forgejo-runner:9.1.1
+    command: '/bin/sh -c "sleep 5; forgejo-runner daemon"'
+    volumes:
+      - ./runner-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - forgejo

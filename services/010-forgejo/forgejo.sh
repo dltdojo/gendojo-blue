@@ -194,6 +194,15 @@ restore_forgejo() {
   return 0
 }
 
+# Function to fix permissions for forgejo data
+fix_data_permission() {
+    echo "Fixing permissions for forgejo data directory..."
+    # Fix permissions using busybox container
+    docker run --rm -v "$(pwd)/forgejo-data:/data" busybox chown -R 1000:1000 /data
+    echo "Permissions fixed successfully!"
+}
+
+
 check_commands_exist() {
   # Ensure each provided command is available in PATH
   for cmd in "$@"; do
@@ -239,7 +248,7 @@ stop_forgejo_docker() {
 }
 
 show_help() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
@@ -248,8 +257,9 @@ Options:
   -x, --stop                    Stop Forgejo and remove containers + volumes (docker compose down -v)
   -b, --backup                  Create timestamped backup of Forgejo data (forgejo-backup-YYYYMMDD-HHMMSS.zip)
       --backup-plakar           Create Plakar backup (uses plakar at configured backup location)
-    --backup-dir DIR          Specify directory for backup files (default: current directory)
+      --backup-dir DIR          Specify directory for backup files (default: current directory)
   -P, --plakar-backup-dir DIR   Specify Plakar backup directory (overrides default PLAKAR_BACKUP_DIR)
+      --fix-perm                Fix permissions for forgejo data directory
   -h, --help                    Show this help message
 
 Examples:
@@ -299,6 +309,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     -r|--restore)
       restore_forgejo
+      exit $?
+      ;;
+    --fix-perm)
+      fix_data_permission
       exit $?
       ;;
     --backup-dir)
