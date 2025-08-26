@@ -5,7 +5,8 @@
 
 # Configuration variables
 PKI_CA_PATH="../010-forgejo/pki/ca.crt"
-RUNNER_IMAGE="my-forgejo-runner:9.1.1"
+FORGEJO_RUNNER_SRV_IMAGE="forgejo-runner-service:9.1.1"
+RUNNER_IMAGE="node22-runner100:latest"
 
 # Function to show help message
 show_help() {
@@ -47,9 +48,15 @@ setup_ca_cert_and_build() {
     echo "Copied CA certificate from $PKI_CA_PATH"
     
     # Build the Docker image
-    echo "Building Docker image: $RUNNER_IMAGE"
-    docker build -t "$RUNNER_IMAGE" .
-    
+    echo "Building Docker image: $FORGEJO_RUNNER_SRV_IMAGE"
+
+    # Build two types of images: Forgejo runner service and runner
+    # forgejo runner is a service that wait for jobs from Forgejo
+    docker build -t "$FORGEJO_RUNNER_SRV_IMAGE" -f Dockerfile .
+
+    # The 'runner' container acts as a worker, executing jobs dispatched by the Forgejo runner service.
+    docker build -t "$RUNNER_IMAGE" -f Dockerfile.runner100 .
+
     echo "Docker image build completed successfully!"
 }
 
@@ -58,8 +65,8 @@ register_runner() {
     echo "Registering runner with Forgejo instance..."
 
     # Check if Docker image exists
-    if ! docker image inspect "$RUNNER_IMAGE" > /dev/null 2>&1; then
-        echo "Error: Docker image $RUNNER_IMAGE not found. Please run '$0 --build' first."
+    if ! docker image inspect "$FORGEJO_RUNNER_SRV_IMAGE" > /dev/null 2>&1; then
+        echo "Error: Docker image $FORGEJO_RUNNER_SRV_IMAGE not found. Please run '$0 --build' first."
         exit 1
     fi
 
@@ -71,7 +78,7 @@ register_runner() {
     fi
     
     # Register the runner
-    docker compose run --rm --entrypoint sh runner -c "forgejo-runner register --no-interactive --instance https://forgejo.localtest.me --name runner101 --labels ubuntu-22.04:docker://node:20-bookworm --token $TOKEN"
+    docker compose run --rm --entrypoint sh runner -c "forgejo-runner register --no-interactive --instance https://forgejo.localtest.me --name fjrunner101 --token $TOKEN"
     
     echo "Runner registration completed!"
 }

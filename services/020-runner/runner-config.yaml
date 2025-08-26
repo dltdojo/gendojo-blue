@@ -1,0 +1,14 @@
+runner:
+  # Set to true to skip TLS certificate verification for the Forgejo instance.
+  insecure: true
+  labels:
+    - "node22:docker://node:22-bookworm"
+    - "runner100:docker://node22-runner100:latest"
+container:
+  # Network to connect the container to.
+  # Can be 'host', 'bridge', or a custom network name.
+  # If empty, act_runner creates a network automatically.
+  #
+  # Note: 'docker compose up' creates networks named <directory_or_projectname>_<network-in-compose>.
+  #
+  network: "fj101_forgejo"

@@ -1,0 +1,15 @@
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: runner100
+    steps:
+      - run:
+          |
+          env
+          echo All Good
+          curl --head https://forgejo.localtest.me
+          echo
+          date
+          echo
+          echo The End

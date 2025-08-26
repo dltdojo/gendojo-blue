@@ -7,12 +7,13 @@ networks:
     external: true
 services:
   runner:
-    image: my-forgejo-runner:9.1.1
+    image: forgejo-runner-service:9.1.1
     # Runner registration is handled in runner.sh for clarity, not in the command section here.
-    command: '/bin/sh -c "sleep 5; forgejo-runner daemon"'
+    command: '/bin/sh -c "sleep 5; forgejo-runner --config /runner-config.yaml daemon"'
     volumes:
       # Storing persistent data in a local path is preferable to using a named volume, since 'docker compose down -v' will not remove the local directory.
       - ./runner-data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ./runner-config.yaml:/runner-config.yaml:ro
     networks:
       - forgejo
