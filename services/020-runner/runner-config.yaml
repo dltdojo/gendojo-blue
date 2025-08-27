@@ -1,6 +1,5 @@
 runner:
-  # Set to true to skip TLS certificate verification for the Forgejo instance.
-  insecure: true
+  insecure: false
   labels:
     - "node22:docker://node:22-bookworm"
     # The DinD container must pull images from the registry
