@@ -3,12 +3,5 @@ runner:
   insecure: true
   labels:
     - "node22:docker://node:22-bookworm"
-    - "runner100:docker://node22-runner100:latest"
-container:
-  # Network to connect the container to.
-  # Can be 'host', 'bridge', or a custom network name.
-  # If empty, act_runner creates a network automatically.
-  #
-  # Note: 'docker compose up' creates networks named <directory_or_projectname>_<network-in-compose>.
-  #
-  network: "fj101_forgejo"
+    # The DinD container must pull images from the registry
+    - "runner100:docker://runner-registry:5000/node22-runner100:latest"

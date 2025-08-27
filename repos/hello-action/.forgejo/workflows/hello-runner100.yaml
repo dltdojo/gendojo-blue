@@ -8,7 +8,11 @@ jobs:
           |
           env
           echo All Good
+          echo "==TEST forgejo service =="
           curl --head https://forgejo.localtest.me
+          echo
+          echo "==TEST google service =="
+          curl --head https://www.google.com
           echo
           date
           echo

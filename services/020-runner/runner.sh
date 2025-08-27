@@ -43,6 +43,7 @@ setup_ca_cert_and_build() {
         echo "Error: CA certificate not found at $PKI_CA_PATH"
         exit 1
     fi
+
     
     cp "$PKI_CA_PATH" my-ca.crt
     echo "Copied CA certificate from $PKI_CA_PATH"
@@ -57,6 +58,22 @@ setup_ca_cert_and_build() {
     # The 'runner' container acts as a worker, executing jobs dispatched by the Forgejo runner service.
     docker build -t "$RUNNER_IMAGE" -f Dockerfile.runner100 .
 
+    docker tag "$RUNNER_IMAGE" "localhost:5000/$RUNNER_IMAGE"
+    
+    # The DinD container must pull images from the registry
+    # Test localhost:5000 port open or notify user to run runner.sh --start to bring the registry up
+    if ! curl --silent --head http://localhost:5000/ > /dev/null; then
+        echo "Error: Local registry is not reachable. Please run 'runner.sh --start' to start the registry."
+        exit 1
+    fi
+
+    # push to local Registry
+    docker push "localhost:5000/$RUNNER_IMAGE"
+
+    # 在你的 DinD 應用容器中執行
+    # docker pull host.docker.internal:5000/my-app:latest
+    # 注意：如果你的 DinD 容器和本地 Registry 容器在同一個自訂的 docker network 中，你也可以直接使用 Registry 容器的名字，
+    # 例如 docker pull local-registry:5000/my-app:latest。
     echo "Docker image build completed successfully!"
 }
 
